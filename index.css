@@ -1,0 +1,627 @@
+import React, { useState } from "react";
+import { useProducts } from "./ProductContext";
+import { Product, ProductCategory } from "./types";
+import { motion, AnimatePresence } from "motion/react";
+import { 
+  Plus, 
+  Search, 
+  RotateCcw, 
+  Edit3, 
+  Trash2, 
+  Check, 
+  X, 
+  ClipboardList, 
+  TrendingUp, 
+  AlertTriangle, 
+  Package, 
+  FolderLock,
+  ArrowUpDown,
+  DollarSign
+} from "lucide-react";
+
+// Safe image renderer with beautiful placeholder fallback for offline or 0-byte images
+const SafeProductImage = ({ src, alt, className }: { src: string; alt: string; className?: string }) => {
+  const [error, setError] = useState(false);
+
+  if (error || !src) {
+    return (
+      <div className={`${className} bg-linear-to-tr from-slate-100 to-slate-50 flex items-center justify-center text-slate-400 select-none border border-slate-200`}>
+        <Package className="w-4 h-4 text-slate-400 shrink-0" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      className={className}
+      alt={alt}
+      onError={() => setError(true)}
+      referrerPolicy="no-referrer"
+    />
+  );
+};
+
+export default function Dashboard() {
+  const {
+    products,
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    toggleAvailability,
+    resetToDefaults,
+    showToast
+  } = useProducts();
+
+  const [adminSearch, setAdminSearch] = useState("");
+  const [adminCategory, setAdminCategory] = useState<string | "All">("All");
+
+  // Manage State of the Add / Edit Dialog
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
+  // Form Field States
+  const [formName, setFormName] = useState("");
+  const [formDescription, setFormDescription] = useState("");
+  const [formPrice, setFormPrice] = useState<number>(0);
+  const [formCategory, setFormCategory] = useState<ProductCategory>(ProductCategory.INGREDIENTS);
+  const [formWeightOrSize, setFormWeightOrSize] = useState("");
+  const [formBrand, setFormBrand] = useState("");
+  const [formImageUrl, setFormImageUrl] = useState("/api/placeholder/400/300");
+  const [formIsAvailable, setFormIsAvailable] = useState(true);
+
+  // Delete Action confirmation safeguards
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+
+  // Stats calculation
+  const totalProductsCount = products.length;
+  const availableCount = products.filter((p) => p.isAvailable).length;
+  const outOfStockCount = totalProductsCount - availableCount;
+  const categoriesCount = new Set(products.map((p) => p.category)).size;
+
+  // Filter products based on search term & category filter for admin view
+  const filteredProducts = products.filter((prod) => {
+    const matchesSearch = 
+      prod.name.toLowerCase().includes(adminSearch.toLowerCase()) ||
+      prod.brand.toLowerCase().includes(adminSearch.toLowerCase()) ||
+      prod.id.toLowerCase().includes(adminSearch.toLowerCase());
+    
+    const matchesCategory = adminCategory === "All" || prod.category === adminCategory;
+
+    return matchesSearch && matchesCategory;
+  });
+
+  // Open modal for adding a new product
+  const handleOpenAddModal = () => {
+    setEditingProduct(null);
+    setFormName("");
+    setFormDescription("");
+    setFormPrice(0);
+    setFormCategory(ProductCategory.INGREDIENTS);
+    setFormWeightOrSize("");
+    setFormBrand("");
+    setFormImageUrl("/api/placeholder/400/300");
+    setFormIsAvailable(true);
+    setIsModalOpen(true);
+  };
+
+  // Open modal for editing a product
+  const handleOpenEditModal = (product: Product) => {
+    setEditingProduct(product);
+    setFormName(product.name);
+    setFormDescription(product.description);
+    setFormPrice(product.price);
+    setFormCategory(product.category);
+    setFormWeightOrSize(product.weightOrSize);
+    setFormBrand(product.brand);
+    setFormImageUrl(product.imageUrl);
+    setFormIsAvailable(product.isAvailable);
+    setIsModalOpen(true);
+  };
+
+  // Handle Form Submission for both Add / Edit operations
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!formName.trim()) {
+      showToast("Product Name is required", "error");
+      return;
+    }
+    if (!formBrand.trim()) {
+      showToast("Product Brand is required", "error");
+      return;
+    }
+    if (formPrice <= 0) {
+      showToast("Price must be a positive number greater than ₱0", "error");
+      return;
+    }
+    if (!formWeightOrSize.trim()) {
+      showToast("Weight or package size details are required", "error");
+      return;
+    }
+
+    const payload = {
+      name: formName,
+      description: formDescription || "Premium baking selection, imported and local.",
+      price: Number(formPrice),
+      category: formCategory,
+      weightOrSize: formWeightOrSize,
+      brand: formBrand,
+      imageUrl: formImageUrl || "/api/placeholder/400/300",
+      isAvailable: formIsAvailable,
+    };
+
+    if (editingProduct) {
+      updateProduct(editingProduct.id, payload);
+    } else {
+      addProduct(payload);
+    }
+
+    setIsModalOpen(false);
+  };
+
+  const confirmDelete = (id: string) => {
+    deleteProduct(id);
+    setItemToDelete(null);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50/70 py-10 px-4 sm:px-6 lg:px-8 text-slate-800" id="admin-dashboard-container">
+      
+      {/* Header Panel */}
+      <div className="max-w-7xl mx-auto mb-10" id="admin-header-panel">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 border-b border-slate-200 pb-6">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="p-1 px-2.5 bg-pink-100 text-pink-800 rounded-lg text-xs font-bold font-mono">
+                IMS SECURE • PORTAL
+              </span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="System synchronizer active" />
+              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Sync State Layer Active</span>
+            </div>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+              Monster Kitchen <span className="text-pink-600 font-extrabold font-sans">Inventory Hub</span>
+            </h1>
+            <p className="text-slate-500 text-xs mt-1">
+              Real-time synchronization engine updates the public storefront catalog instantly upon changes.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              onClick={resetToDefaults}
+              className="bg-amber-50 hover:bg-amber-100 text-amber-800 hover:text-amber-900 text-xs font-bold px-4 py-2.5 rounded-xl border border-amber-300/65 cursor-pointer transition-all flex items-center gap-1.5"
+              title="Reverts back to the original database sample products list"
+            >
+              <RotateCcw className="w-4 h-4" /> Reset Sample Catalog
+            </button>
+            <button
+              onClick={handleOpenAddModal}
+              className="bg-pink-600 hover:bg-pink-700 text-white text-xs font-black px-4.5 py-2.5 rounded-xl shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4.5 h-4.5" /> Register Raw Supply
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Overview Statistics Tracker Dashboard */}
+      <div className="max-w-7xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8" id="statistics-grid-dashboard">
+        {/* Total supply */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="p-3 bg-slate-100 rounded-xl text-slate-500">
+            <ClipboardList className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[11px] text-slate-400 block font-bold uppercase tracking-wider">Reg. SKUs</span>
+            <span className="text-2xl font-black text-slate-900">{totalProductsCount}</span>
+          </div>
+        </div>
+
+        {/* Available supply */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
+            <Package className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[11px] text-slate-400 block font-bold uppercase tracking-wider">Available Status</span>
+            <span className="text-2xl font-black text-emerald-700">{availableCount}</span>
+          </div>
+        </div>
+
+        {/* Out Of Stock tracker */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="p-3 bg-rose-50 rounded-xl text-rose-500">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[11px] text-slate-400 block font-bold uppercase tracking-wider">Out Of Stock</span>
+            <span className="text-2xl font-black text-rose-700">{outOfStockCount}</span>
+          </div>
+        </div>
+
+        {/* Active categories count */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="p-3 bg-pink-50 rounded-xl text-pink-600">
+            <TrendingUp className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[11px] text-slate-400 block font-bold uppercase tracking-wider">Categories</span>
+            <span className="text-2xl font-black text-pink-800">{categoriesCount} / 4</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Interactive Products Controls Database List */}
+      <div className="max-w-7xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden" id="dashboard-main-panel">
+        
+        {/* Subheader bar with quick filters */}
+        <div className="p-5 bg-slate-50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <h3 className="font-extrabold text-sm uppercase text-slate-400 tracking-wider flex items-center gap-2">
+            <FolderLock className="w-4 h-4 text-slate-400" /> Active Inventory Registry List
+          </h3>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Search filter */}
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400 pointer-events-none">
+                <Search className="w-4 h-4" />
+              </span>
+              <input
+                type="text"
+                placeholder="Find item ID, tag, brand..."
+                value={adminSearch}
+                onChange={(e) => setAdminSearch(e.target.value)}
+                className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 text-xs focus:ring-1 focus:ring-pink-500 rounded-lg outline-hidden text-slate-700 w-44 sm:w-56"
+              />
+              {adminSearch && (
+                <button onClick={() => setAdminSearch("")} className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-slate-400">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Category filter dropdown */}
+            <select
+              value={adminCategory}
+              onChange={(e) => setAdminCategory(e.target.value)}
+              className="bg-white border border-slate-200 text-xs px-2.5 py-1.5 rounded-lg text-slate-600 outline-hidden font-medium"
+            >
+              <option value="All">All Categories</option>
+              {Object.values(ProductCategory).map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Database Grid-Table for High Visibility and Styling */}
+        <div className="overflow-x-auto" id="dashboard-items-table">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-[10px] text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200">
+                <th className="py-3 px-5">Products Details & Sourcing</th>
+                <th className="py-3 px-5">Stock Category</th>
+                <th className="py-3 px-5">Retail Price</th>
+                <th className="py-3 px-5 text-center">Inst. Toggle Switch Status</th>
+                <th className="py-3 px-5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-16 text-center text-slate-400 text-xs" id="table-empty-row">
+                    <p className="font-semibold text-slate-600">No matching supply registered</p>
+                    <p className="text-slate-400 text-[11px] mt-1">Change filters or register a new SKU product</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredProducts.map((p) => {
+                  return (
+                    <tr key={p.id} className="hover:bg-slate-50/50 transition-colors" id={`admin-row-${p.id}`}>
+                      {/* Description and Image column */}
+                      <td className="py-3.5 px-5">
+                        <div className="flex gap-4 items-center max-w-sm sm:max-w-md">
+                          <SafeProductImage
+                            src={p.imageUrl}
+                            alt={p.name}
+                            className="w-11 h-11 object-cover rounded-lg bg-slate-50 border border-slate-100 shadow-xs"
+                          />
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-slate-800 text-xs truncate">{p.name}</h4>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[10px] font-mono text-slate-400 uppercase">CDO-ID: {p.id}</span>
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                              <span className="text-[10px] text-slate-500 font-bold">{p.brand}</span>
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                              <span className="text-[10px] text-pink-800 bg-pink-50 px-1.5 py-0.5 rounded-md font-medium">{p.weightOrSize}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* ProductCategory column */}
+                      <td className="py-3.5 px-5 font-medium text-xs text-slate-600">
+                        <span className="p-1 px-2.5 rounded-full text-[10px] font-semibold tracking-wide bg-slate-100 text-slate-700 uppercase">
+                          {p.category}
+                        </span>
+                      </td>
+
+                      {/* Price column */}
+                      <td className="py-3.5 px-5 font-mono font-bold text-xs text-slate-800">
+                        ₱{p.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+
+                      {/* Stock availability toggle instant switch */}
+                      <td className="py-3.5 px-5 text-center">
+                        <div className="flex flex-col items-center justify-center gap-1">
+                          {/* Toggle wrapper */}
+                          <button
+                            onClick={() => toggleAvailability(p.id)}
+                            className={`w-12 h-6.5 rounded-full p-1 transition-all flex items-center relative cursor-pointer outline-hidden ${
+                              p.isAvailable ? "bg-emerald-500 justify-end" : "bg-slate-200 justify-start"
+                            }`}
+                            id={`availability-toggle-btn-${p.id}`}
+                            title={`Toggle status to ${p.isAvailable ? 'Out of Stock' : 'Available'}`}
+                          >
+                            <motion.span 
+                              layout 
+                              className="w-4.5 h-4.5 rounded-full bg-white shadow-sm block" 
+                              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                            />
+                          </button>
+
+                          {/* Human status label */}
+                          <span className={`text-[9px] font-extrabold uppercase tracking-wide tracking-tight ${
+                            p.isAvailable ? "text-emerald-700" : "text-rose-600"
+                          }`}>
+                            {p.isAvailable ? "Available" : "Out of stock"}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-5 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleOpenEditModal(p)}
+                            className="p-1.5 text-slate-500 hover:text-pink-700 hover:bg-pink-50 rounded-lg cursor-pointer transition-colors"
+                            title="Edit product parameters"
+                            id={`edit-item-btn-${p.id}`}
+                          >
+                            <Edit3 className="w-4.5 h-4.5" />
+                          </button>
+
+                          {itemToDelete === p.id ? (
+                            <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 rounded-md p-0.5">
+                              <span className="text-[9px] text-rose-700 font-bold px-1.5 select-none font-mono">CONFIRM?</span>
+                              <button
+                                onClick={() => confirmDelete(p.id)}
+                                className="p-0.5 text-rose-600 hover:text-rose-800 hover:bg-white rounded-md cursor-pointer text-xs"
+                                title="Confirm Deletion"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setItemToDelete(null)}
+                                className="p-0.5 text-slate-400 hover:text-slate-600 hover:bg-white rounded-md cursor-pointer text-xs"
+                                title="Cancel"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setItemToDelete(p.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
+                              title="Delete Item"
+                            >
+                              <Trash2 className="w-4.5 h-4.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+      {/* MULTI_USE FORM DIALOG MODAL (HANDLES BOTH ADD && EDIT OPERATIONS) */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs" id="product-form-modal">
+            <motion.div 
+              className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-200 flex flex-col max-h-[90vh]"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              id="product-form-container"
+            >
+              {/* Modal header branding */}
+              <div className="bg-fuchsia-950 p-5 text-white flex justify-between items-center">
+                <div>
+                  <h3 className="font-extrabold text-base flex items-center gap-2">
+                    <ClipboardList className="w-5 h-5 text-pink-400" />
+                    {editingProduct ? `Edit SKU Registry` : `Register New Raw Supply`}
+                  </h3>
+                  <p className="text-[11px] text-pink-200 mt-0.5">
+                    {editingProduct ? `Modify details for ID: ${editingProduct.id}` : `Ensure all product details are correctly calibrated.`}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setIsModalOpen(false)}
+                  className="p-1 rounded-full bg-pink-900 text-pink-200 hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Form Content body container */}
+              <form onSubmit={handleFormSubmit} className="p-5 overflow-y-auto space-y-4">
+                
+                {/* Product primary Name */}
+                <div>
+                  <label className="block text-slate-700 text-xs font-bold mb-1 uppercase tracking-wide">
+                    Product Display Name: <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Japanese Cake Flour (Special)"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-200 focus:border-pink-400 bg-slate-50/70 rounded-lg outline-hidden text-slate-800 font-sans"
+                  />
+                </div>
+
+                {/* Categories & Brand Selection Grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-700 text-xs font-bold mb-1 uppercase tracking-wide">
+                      Category: <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={formCategory}
+                      onChange={(e) => setFormCategory(e.target.value as ProductCategory)}
+                      className="w-full px-3 py-2 text-xs border border-slate-200 focus:border-pink-400 bg-slate-50 rounded-lg outline-hidden text-slate-800 font-sans"
+                    >
+                      {Object.values(ProductCategory).map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 text-xs font-bold mb-1 uppercase tracking-wide">
+                      Brand Origin: <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Anchor, Puratos, PILMICO"
+                      value={formBrand}
+                      onChange={(e) => setFormBrand(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-200 focus:border-pink-400 bg-slate-50/70 rounded-lg outline-hidden text-slate-800 font-sans"
+                    />
+                  </div>
+                </div>
+
+                {/* Sizing description & Pricing parameters */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-700 text-xs font-bold mb-1 uppercase tracking-wide">
+                      Retail Price (₱ PHP): <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400 font-mono text-xs">
+                        ₱
+                      </span>
+                      <input
+                        type="number"
+                        min="1"
+                        step="0.01"
+                        required
+                        placeholder="0.00"
+                        value={formPrice || ""}
+                        onChange={(e) => setFormPrice(Number(e.target.value))}
+                        className="w-full pl-6 pr-3 py-2 text-xs border border-slate-200 focus:border-pink-400 bg-slate-50/70 rounded-lg outline-hidden text-slate-800 font-mono font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 text-xs font-bold mb-1 uppercase tracking-wide">
+                      Weight or Pack Size: <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 500g, 1 Liter, Pack of 25"
+                      value={formWeightOrSize}
+                      onChange={(e) => setFormWeightOrSize(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-200 focus:border-pink-400 bg-slate-50/70 rounded-lg outline-hidden text-slate-800 font-sans"
+                    />
+                  </div>
+                </div>
+
+                {/* Sourcing Image Placeholder or visual config */}
+                <div>
+                  <label className="block text-slate-700 text-xs font-bold mb-1 uppercase tracking-wide">
+                    Product Graphic Placeholder Path:
+                  </label>
+                  <input
+                    type="text"
+                    value={formImageUrl}
+                    onChange={(e) => setFormImageUrl(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-200 focus:border-pink-400 bg-slate-50/70 rounded-lg outline-hidden text-slate-400 font-mono text-[11px]"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Default is set to an elegant vector sizing mockup frame.</p>
+                </div>
+
+                {/* Description Textarea */}
+                <div>
+                  <label className="block text-slate-700 text-xs font-bold mb-1 uppercase tracking-wide">
+                    Inventory Description / Specs:
+                  </label>
+                  <textarea
+                    rows={2.5}
+                    placeholder="Provide details about recommended baking usages or heat degrees..."
+                    value={formDescription}
+                    onChange={(e) => setFormDescription(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-200 focus:border-pink-400 bg-slate-50/70 rounded-lg outline-hidden text-slate-800 font-sans"
+                  />
+                </div>
+
+                {/* Status Toggle checkmark */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center justify-between">
+                  <div>
+                    <label className="font-bold text-xs text-slate-700 block">Immediate availability status</label>
+                    <span className="text-[10px] text-slate-400">Marked as available instantly upon registration if toggled active.</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormIsAvailable(!formIsAvailable)}
+                    className={`w-11 h-6 rounded-full p-1 transition-all flex items-center relative cursor-pointer outline-hidden ${
+                      formIsAvailable ? "bg-emerald-500 justify-end" : "bg-slate-200 justify-start"
+                    }`}
+                  >
+                    <motion.span 
+                      layout 
+                      className="w-4 h-4 rounded-full bg-white shadow-sm block" 
+                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    />
+                  </button>
+                </div>
+
+                {/* Submit trigger actions */}
+                <div className="border-t border-slate-100 pt-3 flex items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-pink-600 hover:bg-pink-700 text-white text-xs font-extrabold rounded-lg cursor-pointer shadow-xs flex items-center gap-1"
+                  >
+                    <Check className="w-4 h-4" /> Save Supply
+                  </button>
+                </div>
+
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+    </div>
+  );
+}
